@@ -1,0 +1,31 @@
+{
+  "query": "무선청소기",
+  "ts": "2026-06-11 15:00:00",
+  "source": "browser",
+  "items": [
+    {
+      "text": "샤오미 무선청소기 G10 플러스\n159,000원\n리뷰 4,231",
+      "price_guess": "159000",
+      "link": "https://shopping.naver.com/product/111",
+      "rank": 1
+    },
+    {
+      "title": "다이슨 V12 디텍트 슬림 무선청소기",
+      "lprice": "489000",
+      "hprice": "529000",
+      "mall": "다이슨공식스토어",
+      "link": "https://shopping.naver.com/product/222",
+      "productId": "82994455",
+      "rank": 2
+    },
+    {
+      "text": "차이슨 무선청소기 가정용 강력 흡입",
+      "price_guess": null,
+      "link": "https://shopping.naver.com/product/333",
+      "rank": 3
+    },
+    {
+      "rank": 4
+    }
+  ]
+}
