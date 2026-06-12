@@ -21,9 +21,11 @@ OUT_DIR = os.path.join(ROOT, "_workspace")
 SESSION_FILE = os.path.join(ROOT, "data", "naver_session.json")
 
 # 봇차단/캡차/보안확인 시그널 (naver_poc.py L123-126)
+# - 접속불가/혼잡 차단 변종(E2E 2026-06-11 실측: "현재 서비스 접속이 불가합니다")도 포함.
 BLOCK_SIGNALS = [
     "보안 확인", "실제 사용자임을 확인", "스팸을 방지",
     "자동화된", "captcha", "blocked", "비정상적인 접근", "비정상 접근",
+    "접속이 불가", "접속 불가", "잠시 후 다시 접속", "서비스 접속이 불가",
 ]
 
 

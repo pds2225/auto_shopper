@@ -6,6 +6,9 @@ data/
 RESUME.md
 .omc/state/
 .omc/project-memory.json
+.claude/
+# 다른 작업 세션의 결과 산출물 (로컬 보관용)
+_saved/
 # 중간 산출물
 _workspace/
 _workspace_prev/

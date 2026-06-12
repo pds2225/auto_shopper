@@ -38,6 +38,7 @@ from naver_parsers import (
     normalize_candidate,
     parse_review_block,
     dedup_reviews,
+    extract_reviews_from_text,
     build_reviews_schema,
 )
 
@@ -212,6 +213,18 @@ def crawl_reviews(page, product):
     # 리뷰 파싱 및 중복 제거
     parsed = [parse_review_block(t) for t in raw_blocks_all]
     parsed = dedup_reviews(parsed)
+
+    # 셀렉터로 0개면 페이지 텍스트에서 직접 추출 (폴백)
+    if not parsed:
+        try:
+            fulltext = page.inner_text("body", timeout=5000)
+        except Exception:
+            fulltext = body_text
+        fallback = dedup_reviews(extract_reviews_from_text(fulltext, _REVIEW_TARGET_MAX))
+        if fallback:
+            parsed = fallback
+            raw_blocks_all = [r["text"] for r in fallback]
+            reasons.append(f"셀렉터 0 -> 페이지 텍스트 폴백으로 {len(fallback)}개 추출")
 
     # 목표 범위 클램프 (있는 만큼, 최대 40개)
     parsed = parsed[:_REVIEW_TARGET_MAX]
