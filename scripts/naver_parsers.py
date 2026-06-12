@@ -246,6 +246,40 @@ def parse_review_block(block_text):
     return {"text": text, "rating": rating, "date": date}
 
 
+def extract_reviews_from_text(page_text, max_n=40):
+    """페이지 inner_text 에서 "평점 N ... 본문" 패턴으로 리뷰 추출 (셀렉터 폴백).
+
+    네이버 상세는 리뷰가 "평점\n5소음좋아요\n본문..." 형태로 인라인 노출되는데,
+    리뷰 블록 셀렉터가 0개 매칭일 때 텍스트에서 직접 긁는 안전망이다.
+
+    반환: [{"text", "rating": float|None, "date": str|None}, ...]
+    """
+    if not page_text:
+        return []
+    out = []
+    for seg in re.split(r"평점", page_text)[1:]:
+        m = re.match(r"\s*([0-5])(?:\.[0-9])?", seg)
+        if not m:
+            continue
+        rating = float(m.group(1))
+        rest = seg[m.end():]
+        lines = [ln.strip() for ln in rest.split("\n") if ln.strip()]
+        if not lines:
+            continue
+        body = max(lines, key=len)  # 본문은 가장 긴 줄(속성 라벨 '소음좋아요'는 짧음)
+        if len(body) < 12:
+            continue  # 너무 짧으면 리뷰 아님(요약/정렬 라벨 등)
+        date = None
+        dm = _DATE_RE.search(rest)
+        if dm:
+            y, mo, d = dm.group(1), int(dm.group(2)), int(dm.group(3))
+            date = f"{y}-{mo:02d}-{d:02d}"
+        out.append({"text": body[:500], "rating": rating, "date": date})
+        if len(out) >= max_n:
+            break
+    return out
+
+
 def dedup_reviews(reviews):
     """중복 리뷰 제거. text 의 공백을 정규화해 동일 본문이면 1개만 남긴다."""
     seen = set()

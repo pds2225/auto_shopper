@@ -58,6 +58,32 @@ def test_dedup_reviews_whitespace():
     assert len(out) == 1
 
 
+# E2E 실측: 신일 상세 페이지에 인라인으로 노출된 리뷰 텍스트(셀렉터 폴백 대상)
+NAVER_INLINE_REVIEWS = (
+    "4점 이상 리뷰가 94%예요\n도움말\n"
+    "평점\n5소음보통이에요\n드레스룸에서 머리를 말리는데 하도 머리카락이 많이 빠져서 샀어요. "
+    "이건 당연히 부용도이고 그때그때 생기는 먼지 부스러기 쓰레기 정리하기엔 너무 좋아요\n"
+    "평점\n4소음보통이에요\n바닥에 있는 머리카락 책상위 청소할려고 구입했어요 작은 사이즈로 딱 좋네요 만족합니다\n"
+    "평점\n1소음시끄러워요\n한 달 만에 흡입력이 확 떨어졌어요. 배터리도 금방 닳고 별로입니다\n"
+    "평점\n5소음보통이에요\n생각했던 것보다 훨씬 좋습니다 배송도 빠르고 포장도 꼼꼼해서 만족합니다"
+)
+
+
+def test_extract_reviews_from_text_inline():
+    """셀렉터 0개일 때 페이지 텍스트에서 리뷰를 직접 추출해야 한다."""
+    reviews = P.extract_reviews_from_text(NAVER_INLINE_REVIEWS)
+    assert len(reviews) == 4
+    ratings = [r["rating"] for r in reviews]
+    assert ratings == [5.0, 4.0, 1.0, 5.0]          # 낮은 평점(1.0) 포함
+    assert "머리카락" in reviews[0]["text"]
+    assert "소음보통이에요" not in reviews[0]["text"]  # 속성 라벨은 본문에서 제외
+
+
+def test_extract_reviews_from_text_empty():
+    assert P.extract_reviews_from_text("") == []
+    assert P.extract_reviews_from_text("리뷰 없음 평점 정보 없음") == []
+
+
 def test_review_pipeline_from_fixture(review_blocks):
     parsed = [P.parse_review_block(b) for b in review_blocks]
     deduped = P.dedup_reviews(parsed)
