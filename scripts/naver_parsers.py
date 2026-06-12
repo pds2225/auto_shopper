@@ -33,30 +33,65 @@ def parse_price_won(text):
         return None
 
 
-def _find_price_after(text, labels):
-    """라벨(쿠폰적용가 등) 뒤 같은 줄/근접 위치의 가격을 찾는다. 못 찾으면 None.
+def _find_price_after(text, labels, allow_newline=False):
+    """라벨(쿠폰적용가 등) 뒤 근접 위치의 가격을 찾는다. 못 찾으면 None.
 
-    라벨과 가격 사이 간격을 좁게(줄바꿈 불가, 비숫자 0~20자) 제한해
-    다른 줄의 엉뚱한 가격을 끌어오지 않게 한다.
+    라벨과 가격 사이 간격을 좁게(비숫자 0~20자) 제한해 엉뚱한 가격을 막는다.
+    allow_newline=True 면 "상품 가격\n49,900원"처럼 다음 줄의 가격도 허용한다
+    (네이버 상세는 라벨/가격이 다른 줄에 오는 경우가 흔하다).
     """
     if not text:
         return None
+    gap = r"[^0-9]{0,20}?" if allow_newline else r"[^0-9\n]{0,20}?"
     for label in labels:
-        # 라벨 [공백/한글/기호 0~20자, 줄바꿈 제외] 가격원
-        pat = re.compile(re.escape(label) + r"[^0-9\n]{0,20}?([0-9][0-9,]*)\s*원")
+        pat = re.compile(re.escape(label) + gap + r"([0-9][0-9,]*)\s*원")
         m = pat.search(text)
         if m:
             return int(m.group(1).replace(",", ""))
     return None
 
 
+def _find_price_near(text, labels):
+    """라벨이 가격 앞/뒤 어디에 있어도 근접 가격을 찾는다.
+
+    네이버 상세는 "쿠폰적용가 142,000원"(라벨->가격)도 있고
+    "49,400원나의 할인가"(가격->라벨)도 있다. 둘 다 잡는다.
+    """
+    if not text:
+        return None
+    for label in labels:
+        esc = re.escape(label)
+        # 라벨 -> 가격 (같은 줄, 비숫자 0~20자)
+        m = re.search(esc + r"[^0-9\n]{0,20}?([0-9][0-9,]*)\s*원", text)
+        if m:
+            return int(m.group(1).replace(",", ""))
+        # 가격 -> 라벨 (가격 바로 뒤에 라벨이 붙는 형태)
+        m = re.search(r"([0-9][0-9,]*)\s*원[^0-9\n]{0,8}?" + esc, text)
+        if m:
+            return int(m.group(1).replace(",", ""))
+    return None
+
+
 def extract_coupon_price(detail_text):
-    """상세 텍스트에서 쿠폰적용가/즉시할인가 + 표시가 추출.
+    """상세 텍스트에서 쿠폰적용가/할인가 + 판매가 추출.
 
     반환: {"coupon_price": int|None, "list_price": int|None}
+
+    주의: "할인 전 가격"(취소선 정가)은 절대 판매가로 쓰지 않는다.
+    실제 결제가는 "나의 할인가"/"쿠폰적용가"를, 판매가는 "상품 가격"을 우선한다.
     """
-    coupon = _find_price_after(detail_text, ["쿠폰적용가", "쿠폰 적용가", "즉시할인가", "할인적용가"])
-    listp = _find_price_after(detail_text, ["판매가", "정가", "상품금액", "최저"])
+    coupon = _find_price_near(
+        detail_text,
+        ["나의 할인가", "내 할인가", "쿠폰적용가", "쿠폰 적용가",
+         "즉시할인가", "할인적용가"],
+    )
+    # 판매가: '상품 가격'/'판매가' 우선. '할인 전 가격'(취소선)은 라벨에 넣지 않는다.
+    # 네이버는 "상품 가격\n49,900원"처럼 다음 줄에 가격이 오므로 줄바꿈 허용.
+    listp = _find_price_after(
+        detail_text,
+        ["상품 가격", "상품가격", "판매가", "판매 가격", "정가", "상품금액", "최저"],
+        allow_newline=True,
+    )
     if listp is None:
         # 라벨 없이 첫 가격을 표시가로 폴백
         listp = parse_price_won(detail_text)
@@ -125,6 +160,31 @@ def _to_int(val):
     return int(m.group(0)) if m else None
 
 
+def _clean_title(raw):
+    """카드 텍스트 블록에서 상품명 한 줄만 추출.
+
+    browser형 text 는 "찜하기0\n\t\n신일 무선 핸디 청소기...\n49,900원\n배송비\n..."
+    처럼 카드 전체가 담긴다. 찜하기/광고/가격/숫자 줄을 걷어내고 첫 상품명 줄을 고른다.
+    """
+    if not raw:
+        return None
+    for ln in str(raw).split("\n"):
+        ln = ln.strip()
+        # 줄 앞에 붙은 "찜하기N" 제거 후 재검사
+        ln = re.sub(r"^찜하기\d*\s*", "", ln).strip()
+        if not ln:
+            continue
+        if ln in ("찜", "찜하기", "광고", "AD", "ad", "구매", "리뷰", "배송비", "무료"):
+            continue
+        # 가격/숫자만 있는 줄 제외
+        if re.fullmatch(r"[\d,]+\s*원?", ln):
+            continue
+        if re.fullmatch(r"[\d,]+", ln):
+            continue
+        return ln[:120]
+    return None
+
+
 def normalize_candidate(raw_item):
     """01_candidates 항목을 단일 스키마로 정규화.
 
@@ -134,10 +194,12 @@ def normalize_candidate(raw_item):
     반환: {"rank", "title", "list_price", "mall", "link", "product_id"}
     """
     raw_item = raw_item or {}
-    # 제목: api형 title 우선, 없으면 browser형 text
-    title = raw_item.get("title") or raw_item.get("text") or None
-    if title is not None:
-        title = str(title).strip() or None
+    # 제목: api형 title 우선(이미 정제됨), 없으면 browser형 text 를 정제
+    api_title = raw_item.get("title")
+    if api_title:
+        title = str(api_title).strip() or None
+    else:
+        title = _clean_title(raw_item.get("text"))
     # 가격: api형 lprice 우선, 없으면 browser형 price_guess
     list_price = _to_int(raw_item.get("lprice"))
     if list_price is None:

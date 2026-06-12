@@ -47,6 +47,16 @@ def test_normalize_none_input():
     assert out["link"] is None
 
 
+def test_normalize_title_strips_card_noise():
+    """E2E 실측: 카드 블록(찜하기N/가격/스펙)에서 상품명 한 줄만 뽑아야 한다."""
+    blob = ("찜하기0\n\t\n신일 무선 핸디 청소기 가벼운 저렴한 소형 미니 원룸 핸드\n"
+            "49,900원\n배송비\n무료\n무료교환반품\n오늘출발\n별점\n4.72\n리뷰\n(1.2만)구매")
+    out = P.normalize_candidate({"text": blob, "price_guess": "49900",
+                                 "link": "https://x/1", "rank": 1})
+    assert out["title"] == "신일 무선 핸디 청소기 가벼운 저렴한 소형 미니 원룸 핸드"
+    assert out["list_price"] == 49900
+
+
 def test_normalize_from_fixture(candidates_sample):
     items = candidates_sample["items"]
     norm = [P.normalize_candidate(it) for it in items]
