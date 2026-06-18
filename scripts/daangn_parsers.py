@@ -175,77 +175,41 @@ _CARD_PRICE_RE = re.compile(r"(?:\d+(?:\.\d+)?\s*만\s*원?|[0-9][0-9,]*\s*원)"
 def parse_search_listings_from_text(page_text):  # ★ 신규설계 [B1, naver 선례 無]
     """검색결과 페이지 inner_text blob -> [매물 dict, ...] (셀렉터 0매칭 폴백).
 
-    분할 경계 가설(§4-A):
-      - 가격 토큰("...원"/"...만원")을 1차 앵커로 본다(카드당 보통 가격 1개).
-      - 가격 미표기 카드(거래완료 등) 누락 방지를 위해 반복 마커
-        (거래완료/예약중/N분 전/N시간 전/N일 전)도 보조 경계 앵커로 함께 쓴다(R-3).
-      - 두 신호의 위치를 OR 로 모아 카드 경계로 삼고, 각 조각을 parse_listing 에 위임.
+    줄 기반 분할(§4-A): 당근 카드는 보통 "제목 / 가격 / 동네 / N분 전 / (거래상태)"
+    순서라, 시간마커(N분 전 등)·거래상태(거래완료/예약중/판매완료) 줄을
+    '카드 끝 신호'로 본다. 끝 신호 줄을 만나면 그때까지 쌓인 줄 버퍼를 한 카드로
+    확정한다(가격+시간마커가 한 카드에 함께 와도 과분할되지 않는다).
 
-    빈/쓰레기 blob -> []. 가격 없는 카드도 누락 말고 price=None 으로 보존.
-    (실측 분할 정확도는 §8 T8 검증 대상.)
+    가격 미표기 카드(거래완료/가격문의 등)도 끝 신호로 분리돼 price=None 으로 보존된다.
+    빈/쓰레기 blob -> []. (실측 분할 정확도는 §8 T8 검증 대상.)
     """
     if not page_text:
         return []
-    text = str(page_text)
-
-    # 가격 앵커 + 마커 앵커의 시작 위치를 모두 모아 카드 경계로 사용.
-    anchors = sorted(set(
-        [m.start() for m in _CARD_PRICE_RE.finditer(text)]
-        + [m.start() for m in _CARD_MARKER_RE.finditer(text)]
-    ))
-    if not anchors:
-        return []
-
-    # 인접 앵커가 같은 카드(가격+마커가 한 카드에 함께)일 수 있으므로,
-    # 각 앵커를 카드 "신호점"으로 보되 조각은 직전 신호점 직후 ~ 다음 신호점 직전까지.
-    # 첫 카드는 첫 신호점 직전 텍스트(제목)부터 포함되게 0 을 경계 시작에 넣는다.
-    bounds = [0] + anchors + [len(text)]
-    # 중복/근접 경계 정리: 너무 가까운(같은 카드 내) 앵커는 하나로 합친다.
-    seg_starts = []
-    last = None
-    for b in bounds:
-        if last is None or b - last >= 1:
-            seg_starts.append(b)
-            last = b
-    seg_starts = sorted(set(seg_starts))
-
     listings = []
-    for i in range(len(seg_starts) - 1):
-        chunk = text[seg_starts[i]:seg_starts[i + 1]]
-        if not chunk.strip():
-            continue
-        # 가격 토큰도 마커도 없는 순수 잡음 조각은 건너뛴다(쓰레기 방지).
+    buf = []
+
+    def _flush():
+        chunk = "\n".join(buf).strip()
+        buf.clear()
+        if not chunk:
+            return
+        # 가격 토큰도 마커도 없는 순수 잡음 조각(메뉴/내비 등)은 버린다.
         if not (_CARD_PRICE_RE.search(chunk) or _CARD_MARKER_RE.search(chunk)):
-            continue
+            return
         listing = parse_listing(chunk)
-        # 제목·가격·마커가 모두 비어 있으면 카드로 보지 않는다.
-        if listing["title"] is None and listing["price"] is None and not listing["traded"]:
-            continue
+        # 제목·가격·거래상태가 모두 비어 있으면 카드로 보지 않는다.
+        if (listing["title"] is None and listing["price"] is None
+                and not listing["traded"]):
+            return
         listings.append(listing)
-    return _merge_partial_cards(listings)
 
-
-def _merge_partial_cards(listings):
-    """분할 과정에서 제목만/가격만 떨어진 인접 조각을 한 카드로 합친다.
-
-    가격 앵커와 마커 앵커가 같은 카드를 두 조각으로 쪼갠 경우(제목+가격 조각 다음에
-    마커만 있는 조각이 따라오는 식)를 보정한다. 보수적으로: 직전 카드가 가격은 있는데
-    제목이 없고, 현재 조각이 제목만 있으면 합치는 식의 단순 병합은 하지 않고,
-    "제목 없는 마커-only 조각"을 직전 카드의 traded 신호로만 흡수한다.
-    """
-    if not listings:
-        return []
-    merged = []
-    for lst in listings:
-        is_marker_only = (
-            lst["title"] is None and lst["price"] is None and lst["traded"]
-        )
-        if is_marker_only and merged:
-            # 직전 카드에 거래상태만 보강(중복 카드 생성 방지).
-            merged[-1]["traded"] = True
-            continue
-        merged.append(lst)
-    return merged
+    for ln in str(page_text).split("\n"):
+        buf.append(ln)
+        # 카드 끝 신호(시간마커/거래상태)를 만나면 카드 확정.
+        if _CARD_MARKER_RE.search(ln):
+            _flush()
+    _flush()  # 끝 신호 없이 남은 마지막 카드(가격만 있는 경우 등)
+    return listings
 
 
 def filter_listings(listings, query):  # ★ 신규설계 [R1/D3 입력정합]
@@ -287,6 +251,75 @@ def filter_listings(listings, query):  # ★ 신규설계 [R1/D3 입력정합]
             out.append(lst)
         listings = out
     return listings
+
+
+# 상태 등급 순위(품질 높을수록 큼) — filter_by_conditions 최소등급 비교용.
+_CONDITION_RANK = {"하자": 0, "보통": 1, "상급": 2, "새것": 3}
+
+
+def filter_by_conditions(listings, conditions):  # ★ 신규설계 — 사용자 조건 필터
+    """사용자 조건으로 매물 필터 (조건최저가 v2, 설계 §4).
+
+    conditions = {
+      "min_condition": str|None,  # 최소 상태등급(이상). "상급" -> 상급·새것 통과.
+      "on_sale_only": bool,       # True 면 traded(거래완료/예약중) 제외.
+      "include": [str],           # 모두 포함(AND). 검색 대상 = title + " " + tags.
+      "exclude": [str],           # 하나라도 포함되면 제외(OR).
+    }
+    빈/None conditions 면 전부 통과(원본 순서 보존).
+    """
+    listings = listings or []
+    conditions = conditions or {}
+    min_cond = conditions.get("min_condition")
+    on_sale_only = bool(conditions.get("on_sale_only"))
+    include = [k for k in (conditions.get("include") or []) if k]
+    exclude = [k for k in (conditions.get("exclude") or []) if k]
+    min_rank = _CONDITION_RANK.get(min_cond) if min_cond else None
+
+    out = []
+    for lst in listings:
+        # 판매중만 — 거래완료/예약중 제외
+        if on_sale_only and lst.get("traded"):
+            continue
+        # 최소 상태등급 — rank(condition) >= rank(min_condition)
+        if min_rank is not None:
+            cond = lst.get("condition") or "보통"
+            if _CONDITION_RANK.get(cond, 0) < min_rank:
+                continue
+        # 키워드 매칭 대상: 제목 + 태그
+        hay = ((lst.get("title") or "") + " "
+               + " ".join(lst.get("tags") or [])).lower()
+        # include: 모두 포함(AND)
+        if include and not all(k.lower() in hay for k in include):
+            continue
+        # exclude: 하나라도 포함되면 제외(OR)
+        if exclude and any(k.lower() in hay for k in exclude):
+            continue
+        out.append(lst)
+    return out
+
+
+def select_lowest(listings, n=5):  # ★ 신규설계 — 조건 통과 매물 최저가 N개
+    """살 수 있는 매물(traded 제외, price int)을 가격 오름차순 n개.
+
+    n 부족하면 있는 만큼. 반환 항목: {price, condition, title, link}.
+    n 이 잘못된 값이면 5 로 폴백.
+    """
+    n = n if isinstance(n, int) and n > 0 else 5
+    priced = [
+        lst for lst in (listings or [])
+        if not lst.get("traded") and isinstance(lst.get("price"), int)
+    ]
+    priced.sort(key=lambda l: l["price"])
+    return [
+        {
+            "price": lst["price"],
+            "condition": lst.get("condition") or "보통",
+            "title": lst.get("title"),
+            "link": lst.get("link"),
+        }
+        for lst in priced[:n]
+    ]
 
 
 def _priced_listings(listings):
@@ -488,10 +521,11 @@ def build_listings_schema(query, mode, target, listings, needs_human):
 
 
 def build_report_schema(query, mode, verdict_obj, stats_by_condition,
-                        cheap_picks, warnings):
-    """02_price_report.json 스키마 조립 (설계 §5).
+                        cheap_picks, warnings, condition_deals=None):
+    """02_price_report.json 스키마 조립 (설계 §5 + v2 조건최저가).
 
     verdict_obj 에 confidence 포함(B2①). note 에 호가분포 한계 고정.
+    condition_deals: 사용자 조건 기반 최저가 결과(없으면 None). 설계 v2 §5.
     """
     from daangn_common import now
     return {
@@ -502,6 +536,7 @@ def build_report_schema(query, mode, verdict_obj, stats_by_condition,
         "stats_by_condition": stats_by_condition or {},
         "cheap_picks": cheap_picks or [],
         "warnings": warnings or [],
+        "condition_deals": condition_deals,
         "note": _REPORT_NOTE,
     }
 

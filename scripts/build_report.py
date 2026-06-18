@@ -33,6 +33,8 @@ if _SCRIPTS_DIR not in sys.path:
 from daangn_common import save_with_alias, SAVED_DIR, OUT_DIR
 from daangn_parsers import (
     filter_listings,
+    filter_by_conditions,
+    select_lowest,
     classify_condition,
     compute_price_stats,
     verdict,
@@ -44,6 +46,8 @@ from daangn_parsers import (
 
 # 같은 상태군에서 "지금 싼 매물" 으로 추려 보여줄 최대 개수(설계 §5 cheap_picks).
 _CHEAP_PICKS_TOP_N = 3
+# (v2) 사용자 조건 기반 최저가 기본 개수(설계 v2 §2).
+_DEALS_TOP_N = 5
 # 상태군 표 출력 순서(없는 군은 생략).
 _COND_ORDER = ("새것", "상급", "보통", "하자")
 
@@ -108,7 +112,7 @@ def _collect_cheap_picks(listings, stats_by_condition):
 # 핵심 순수 함수 (파일 I/O 없음 — 테스트 대상)
 # ---------------------------------------------------------------------------
 
-def build(listings_obj):
+def build(listings_obj, conditions=None):
     """01_listings dict 를 받아 02_price_report 구조를 반환하는 순수 함수.
 
     파일 I/O 없음. main() 과 외부 테스트 양쪽에서 호출 가능.
@@ -116,8 +120,11 @@ def build(listings_obj):
     흐름:
       filter_listings(입력정합) -> 매물별 classify_condition(태그->등급 재확정)
       -> compute_price_stats(상태군별) -> (link 모드) target 상태군 분포로 verdict
-      -> detect_cheap_warnings -> build_report_schema.
+      -> detect_cheap_warnings -> (conditions 있으면) 조건 최저가 -> build_report_schema.
     needs_human 이 True 여도 진행분으로 리포트를 만든다(멈춤 없음, AC-4).
+
+    conditions: 사용자 조건 dict(설계 v2). 주어지면 조건 통과 매물 중
+      가격 오름차순 최저가 N개를 condition_deals 로 추가한다(없으면 None).
     """
     obj = listings_obj or {}
     query = obj.get("query") or "unknown"
@@ -148,8 +155,24 @@ def build(listings_obj):
     warnings = detect_cheap_warnings(listings, stats_by_condition)
     cheap_picks = _collect_cheap_picks(listings, stats_by_condition)
 
+    # ⑥ (v2) 사용자 조건 기반 최저가 — conditions 주어졌을 때만.
+    condition_deals = None
+    if conditions is not None:
+        matched = filter_by_conditions(listings, conditions)
+        buyable = [
+            l for l in matched
+            if not l.get("traded") and isinstance(l.get("price"), int)
+        ]
+        top_n = conditions.get("top") or _DEALS_TOP_N
+        condition_deals = {
+            "conditions": conditions,
+            "matched_count": len(buyable),
+            "deals": select_lowest(matched, top_n),
+        }
+
     return build_report_schema(
         query, mode, verdict_obj, stats_by_condition, cheap_picks, warnings,
+        condition_deals,
     )
 
 
@@ -175,6 +198,21 @@ def _verdict_korean(verdict_obj):
     if conf == "low" or label == "판정보류":
         line += "\n> 표본이 적어 추정 신뢰도가 낮습니다. 참고용으로만 보세요."
     return line
+
+
+def _conditions_korean(c):
+    """조건 dict -> 사람용 한 줄 요약 (v2 condition_deals)."""
+    c = c or {}
+    parts = []
+    if c.get("min_condition"):
+        parts.append(f"{c['min_condition']} 이상")
+    if c.get("on_sale_only"):
+        parts.append("판매중만")
+    if c.get("include"):
+        parts.append("포함: " + ", ".join(c["include"]))
+    if c.get("exclude"):
+        parts.append("제외: " + ", ".join(c["exclude"]))
+    return " · ".join(parts) if parts else "조건 없음(전체 최저가)"
 
 
 def render_markdown(report):
@@ -240,6 +278,21 @@ def render_markdown(report):
             lines.append("> 표본이 8건 미만인 상태군은 25%/75% 분위를 생략했습니다(과신 방지).")
     lines.append("")
 
+    # 조건 맞는 최저가 (v2 — condition_deals 있을 때만)
+    cdeals = report.get("condition_deals")
+    if cdeals and cdeals.get("deals"):
+        lines.append("## 조건 맞는 최저가")
+        lines.append(f"- 조건: {_conditions_korean(cdeals.get('conditions') or {})}")
+        lines.append(f"- 조건 통과 매물 {cdeals.get('matched_count', 0)}건 중 최저가순")
+        lines.append("")
+        for i, d in enumerate(cdeals["deals"], 1):
+            link = d.get("link") or "(링크 없음)"
+            title = d.get("title") or "(제목 없음)"
+            lines.append(
+                f"{i}. {_fmt_won(d.get('price'))} · [{d.get('condition')}] {title} — {link}"
+            )
+        lines.append("")
+
     # 싼 매물
     if cheap_picks:
         lines.append("## 지금 싼 매물")
@@ -293,7 +346,39 @@ def _save_report_md(report):
     return path
 
 
+def _parse_conditions(argv=None):
+    """CLI 인자 -> conditions dict (조건 인자가 하나라도 있을 때만, 아니면 None)."""
+    import argparse
+    ap = argparse.ArgumentParser(
+        description="당근 시세 점검 리포트 (+조건 기반 최저가)"
+    )
+    ap.add_argument("--min-condition", choices=["새것", "상급", "보통", "하자"],
+                    help="최소 상태등급(이상). 예: 상급 -> 상급·새것만")
+    ap.add_argument("--on-sale-only", action="store_true",
+                    help="거래완료/예약중 제외(판매중만)")
+    ap.add_argument("--include", action="append", default=[], metavar="단어",
+                    help="제목/태그에 모두 포함(AND). 반복 지정 가능")
+    ap.add_argument("--exclude", action="append", default=[], metavar="단어",
+                    help="제목/태그에 하나라도 있으면 제외(OR). 반복 지정 가능")
+    ap.add_argument("--top", type=int, default=None,
+                    help=f"최저가 표시 개수(기본 {_DEALS_TOP_N})")
+    args = ap.parse_args(argv)
+
+    if (args.min_condition or args.on_sale_only or args.include
+            or args.exclude or args.top is not None):
+        return {
+            "min_condition": args.min_condition,
+            "on_sale_only": bool(args.on_sale_only),
+            "include": args.include,
+            "exclude": args.exclude,
+            "top": args.top or _DEALS_TOP_N,
+        }
+    return None
+
+
 def main():
+    conditions = _parse_conditions()
+
     listings_path = os.path.join(OUT_DIR, "01_listings.json")
 
     if not os.path.exists(listings_path):
@@ -305,7 +390,7 @@ def main():
         print("[오류] 01_listings.json 읽기 실패")
         sys.exit(1)
 
-    result = build(listings_obj)
+    result = build(listings_obj, conditions)
 
     # 자가 검증 (02 스키마 필수키)
     required = [
@@ -340,6 +425,15 @@ def main():
               f"{_fmt_won(s.get('median')):>10} {_fmt_won(s.get('max')):>10}")
     for w in (result.get("warnings") or []):
         print(f"[경고] {w}")
+    # (v2) 조건 기반 최저가 콘솔 출력
+    cdeals = result.get("condition_deals")
+    if cdeals and cdeals.get("deals"):
+        print()
+        print(f"[조건 최저가] {_conditions_korean(cdeals.get('conditions') or {})}"
+              f"  — 통과 {cdeals.get('matched_count', 0)}건")
+        for i, d in enumerate(cdeals["deals"], 1):
+            print(f"  {i}. {_fmt_won(d.get('price')):>12}  [{d.get('condition')}]  "
+                  f"{d.get('title') or ''}")
     print()
     print(f"[note] {result.get('note')}")
 
