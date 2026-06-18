@@ -1,7 +1,7 @@
 # 당근 가격비교 (시세 점검) — 구현 계획 (ralplan)
 
 > 상태: pending approval (ralplan)
-> 작성 2026-06-18. 개정 2026-06-18 (Critic ITERATE 1차 반영: B1·B2 + R/정합성 7건).
+> 작성 2026-06-18. 개정 2026-06-18 (Critic 1차: B1·B2 + R/정합성 7건 / 3회차 최종봉합: B-NEW 라벨통일·R-1 경계부등호·R-2 군별필터·R-3 마커앵커).
 > 기반 설계: `.omc/specs/daangn-price-check-design.md` (확정본).
 > 임무: 확정 설계를 **구현 가능한 단계별 계획**으로 분해. 새 설계 금지(단, Critic 지적된 판단로직은 test-first 신규설계로 명기).
 > 미러링 원본: `scripts/naver_common.py`, `scripts/naver_parsers.py`.
@@ -52,10 +52,10 @@
   - ★ `extract_status_tags(text) -> list[str]` — 사전 기반 상태 태그(새것군/상급/하자군, 설계 §3-1). 매칭 없으면 [].
   - ★ `classify_condition(tags) -> str` — 4등급. **충돌 시 보수적 다운그레이드**(R3①): 하자군 있으면 "하자" > (상급 태그 없이 확실한 새것 태그 `미개봉`/`미사용`만) "새것" > 상급 태그가 섞이면 "상급" > 그 외/빈 "보통". 즉 "상급+새것" 동시 출현 → **"상급"으로 강등**(높은 등급 오분류가 구매자에게 더 위험).
   - ★ `parse_listing(card_text) -> dict` — 카드 텍스트 한 덩어리 → `{title, price, tags, condition, traded, link:None}`. traded: "거래완료"/"예약중" 감지. link는 수집기가 채움.
-  - ★ `parse_search_listings_from_text(page_text) -> list[dict]` — **[B1 신규설계, naver 선례 없음]** 검색결과 페이지 `inner_text` blob → 매물 dict 리스트. 셀렉터 0매칭 시 순수 폴백. **분할 경계 가설**(T8 이전 문서화, §4-A): 가격 토큰(`...원`) 또는 반복 마커("거래완료"/"예약중"/"N분 전"/"N시간 전"/동네명)를 카드 경계로 본다. 각 조각을 `parse_listing`에 위임.
-  - ★ `filter_listings(listings, query) -> list[dict]` — **[R1/D3 입력정합 가드, 1차 포함]** ① 제목에 검색어 핵심토큰(공백분리 후 1글자 초과 토큰) 하나도 없으면 제외 ② 가격 이상치 제거: 전체 median 대비 5배 초과 또는 1/5 미만 제외. 통계·판정 전에 적용.
+  - ★ `parse_search_listings_from_text(page_text) -> list[dict]` — **[B1 신규설계, naver 선례 없음]** 검색결과 페이지 `inner_text` blob → 매물 dict 리스트. 셀렉터 0매칭 시 순수 폴백. **분할 경계 가설**(T8 이전 문서화, §4-A): 가격 토큰(`...원`)을 1차 앵커로 보되, **[R-3]** 가격 미표기 카드(거래완료 등)가 누락되지 않도록 반복 마커("거래완료"/"예약중"/"N분 전"/"N시간 전"/동네명)도 **보조 경계 앵커**로 함께 사용한다. 각 조각을 `parse_listing`에 위임. (실측 검증은 §8 T8 대상)
+  - ★ `filter_listings(listings, query) -> list[dict]` — **[R1/D3 입력정합 가드, 1차 포함]** ① 제목에 검색어 핵심토큰(공백분리 후 1글자 초과 토큰) 하나도 없으면 제외 ② 가격 이상치 제거: **1차는 전체 median 기준** 5배 초과 또는 1/5 미만 제외(`> median*5` 또는 `< median/5`). 통계·판정 전에 적용. **[R-2 결정]** 새것/하자 가격차로 정상 새것 매물이 오제거될 수 있어 **"상태군 분류 후 군별 median 기준 정밀화"는 §8 후속과제로 명기**(1차는 전체 median 유지 — 분류 전 단계라 군 정보가 없어 단순·안전 우선).
   - ★ `compute_price_stats(listings) -> dict` — 상태군별 분포. **소표본 가드(B2②)**: n<8이면 p25/p75 키 자체를 **출력하지 않음**(`min`/`median`/`max`만). traded/price None 매물 제외.
-  - ★ `verdict(target_price, stats) -> dict` — 타깃 상태군 분포 백분위 → `{label, percentile, condition, target_price, confidence}`. **confidence(B2①)**: 해당 군 n>=8이면 `"mid"`, 3<=n<8이면 `"low"`, n<3이면 `label="판정보류"`+`confidence="low"`. **라벨 기준(B2④ 본문 결정)**: n>=8은 백분위(`<=0.33` 싼편/`>=0.67` 비쌈/중간 적정), `confidence="mid"`. 3<=n<8은 분위 불가 → **median 대비 비율 라벨 채택**(`<=median*0.9` 싼편/`>=median*1.1` 비쌈/그 외 적정=±10%), `percentile=None`, `confidence="low"`. (비율 라벨을 §7로 미루지 않고 소표본 정식 규칙으로 채택)
+  - ★ `verdict(target_price, stats) -> dict` — 타깃 상태군 분포 → `{label, percentile, condition, target_price, confidence}`. **라벨 통일(B-NEW, Architect 권장#1)**: 싼편/적정/비쌈 라벨은 **모든 n에서 median 비율 규칙 하나로 통일** — `target <= median*0.9` 싼편 / `target >= median*1.1` 비쌈 / 그 외 적정(±10%). 표본 1건 차이로 라벨이 역전되는 불연속을 제거한다. **백분위(percentile)는 n>=8일 때만 부가 참고정보로 채워 표기**(`float`), 라벨 결정에는 사용하지 않는다. n<8이면 `percentile=None`. **confidence(B2①, n 기반 유지)**: n>=8 `"mid"`, 3<=n<8 `"low"`, n<3 `label="판정보류"`+`confidence="low"`. (라벨 체계는 n에 무관, confidence·percentile 표기만 n에 의존)
   - ★ `detect_cheap_warnings(listings, stats) -> list[str]` — **수치 규칙 확정(R2/D5)**: 같은 상태군에서 `price < median*0.5` **또는** (n>=8) `price < p25 - 1.5*IQR`(IQR=p75-p25) 이면 "확인 권장" 경고. 둘 다 미해당이면 경고 없음.
   - `build_listings_schema(query, mode, target, listings, needs_human) -> dict` — 01 스키마(설계 §5).
   - `build_report_schema(query, mode, verdict_obj, stats_by_condition, cheap_picks, warnings) -> dict` — 02 스키마(설계 §5). **verdict 객체에 `confidence` 포함**(B2①). note에 호가분포 한계 고정.
@@ -165,17 +165,21 @@ def compute_price_stats(listings: list[dict]) -> dict:  # ★ 소표본 가드
     """ 상태군별 {"n","min","median","max", (n>=8이면)"p25","p75"}.
         n<8이면 p25/p75 키 자체를 출력하지 않음. traded/price None 제외. n=0 군 생략. """
 
-def verdict(target_price: int, stats: dict) -> dict:  # ★ confidence 바인딩
+def verdict(target_price: int, stats: dict) -> dict:  # ★ 라벨 통일 + confidence 바인딩
     """ {"label":"싼편"|"적정"|"비쌈"|"판정보류","percentile":float|None,
         "condition":str,"target_price":int,"confidence":"low"|"mid"}.
-        - n>=8: 백분위 라벨(<=0.33 싼편/>=0.67 비쌈/중간 적정), confidence="mid".
-        - 3<=n<8: 분위 없음 -> median 비율 라벨(<=median*0.9 싼편/>=*1.1 비쌈/그 외 적정),
-          percentile=None, confidence="low".
-        - n<3: label="판정보류", confidence="low". """
+        [라벨 통일 — 모든 n에서 median 비율 단일 규칙 (B-NEW)]:
+          target <= median*0.9  -> "싼편"   (이하 포함, <=)
+          target >= median*1.1  -> "비쌈"   (이상 포함, >=)
+          그 외(median*0.9 초과 ~ median*1.1 미만) -> "적정"
+        [percentile — 라벨에 미사용, 참고정보만]:
+          n>=8 이면 백분위(float) 채워 표기, n<8 이면 None.
+        [confidence — n 기반]:
+          n>=8 "mid" / 3<=n<8 "low" / n<3 label="판정보류" + "low". """
 
 def detect_cheap_warnings(listings, stats) -> list[str]:  # ★ 수치 규칙 확정
-    """ 같은 상태군에서 price < median*0.5 또는 (n>=8) price < p25-1.5*IQR 이면
-        "확인 권장" 경고. IQR=p75-p25. """
+    """ 같은 상태군에서 price < median*0.5 (미만, <) 또는
+        (n>=8) price < p25-1.5*IQR (미만, <) 이면 "확인 권장" 경고. IQR=p75-p25. """
 
 def build_listings_schema(query, mode, target, listings, needs_human) -> dict: ...
 def build_report_schema(query, mode, verdict_obj, stats_by_condition,
@@ -195,11 +199,29 @@ def build(listings_obj: dict) -> dict:    # filter_listings -> classify -> stats
 def render_markdown(report: dict) -> str: # 분포표+판정(confidence)+호가한계 note. 순수.
 ```
 
+### 경계 부등호 단정 표 (R-1 — 포함/미포함 방향 명문화)
+모든 경계 함수의 부등호를 아래대로 고정한다. §3 경계 테스트는 정확히 이 방향(포함/미포함)을 assert한다.
+
+| 함수 | 조건 | 부등호 | 포함 여부 | 결과 |
+|---|---|---|---|---|
+| `verdict` | `target` vs `median*0.9` | `<=` | **이하 포함** | "싼편" |
+| `verdict` | `target` vs `median*1.1` | `>=` | **이상 포함** | "비쌈" |
+| `verdict` | 그 사이(0.9 초과 ~ 1.1 미만) | `<` 양끝 | 양끝 미포함 | "적정" |
+| `compute_price_stats` | `n` vs `8` (분위 출력) | `>=` | **8 포함** 시 p25/p75 출력 | — |
+| `verdict`/`compute_price_stats` | `n` vs `3` (판정보류) | `<` | **3 미만**(0,1,2) 보류 | "판정보류" |
+| `verdict` confidence | `n` vs `8` (mid) | `>=` | 8 포함 "mid", 그 미만 "low" | — |
+| `detect_cheap_warnings` | `price` vs `median*0.5` | `<` | **미만**(0.5배 정확히 같으면 경고 아님) | "확인 권장" |
+| `detect_cheap_warnings` | `price` vs `p25-1.5*IQR` (n>=8) | `<` | **미만** | "확인 권장" |
+| `filter_listings` 이상치 | `price` vs `median*5` / `median/5` | `>` / `<` | 초과/미만(경계값은 보존) | 제외 |
+
+> 정확한 경계값(예: `median*0.9`와 같은 값)은 위 표대로 처리: 싼편은 `<=`라 **경계값 포함=싼편**, cheap_warning은 `<`라 **경계값=경고 아님**, filter 이상치는 `>`/`<`라 **경계값=보존**.
+
 ### 설계 §5 스키마 보강 (이 개정으로 추가/변경되는 필드)
 ```jsonc
 // 02_price_report.json -> verdict 에 confidence 추가 (B2①)
+// percentile 은 n>=8 일 때만 채우고(참고정보), 라벨 결정엔 미사용 (B-NEW)
 "verdict": { "label":"비쌈","percentile":0.8,"condition":"상급",
-             "target_price":350000, "confidence":"mid" }   // ← confidence 신규
+             "target_price":350000, "confidence":"mid" }   // percentile=참고, n<8이면 null
 // stats_by_condition 의 각 군: n<8 이면 p25/p75 키 없음 (B2②)
 "상급": { "n":5,"min":280000,"median":310000,"max":340000 }  // p25/p75 생략 예시
 ```
@@ -217,10 +239,12 @@ def render_markdown(report: dict) -> str: # 분포표+판정(confidence)+호가�
 
 **test_daangn_stats.py** (`compute_price_stats`, `verdict`)
 - 홀수/짝수 n 중앙값 경계.
-- **n=7 → p25/p75 키 없음 / n=8 → 분위 표시** (B2③ 경계).
-- n>=8 백분위 경계: 정확히 0.33 / 0.67 지점 라벨.
-- 3<=n<8 → median 비율 라벨(median*0.9 / *1.1 경계) + confidence="low".
-- n<3 → "판정보류" + confidence="low".
+- **n=7 → p25/p75 키 없음 / n=8 → 분위 표시** (B2③ 통계 출력 경계, 유지).
+- **라벨 통일(B-NEW): 모든 n에서 median 비율로 라벨.** 경계 부등호 방향 단정(R-1): `target==median*0.9` → "싼편"(<=, 포함) / `target==median*1.1` → "비쌈"(>=, 포함) / 그 사이 → "적정".
+- **불연속 회귀(B-NEW 필수): 동일 분포에서 n=7과 n=8의 `label`이 동일하다** — 표본 1건 차이로 적정↔비쌈 역전 없음을 assert(같은 target_price·같은 median).
+- **percentile 표기: n>=8 → percentile=float(참고정보) / n<8 → percentile=None.** (라벨은 두 경우 모두 median 비율로 동일)
+- confidence: n>=8 "mid" / 3<=n<8 "low" / n<3 "판정보류"+"low" (n 기반).
+- n<3 → label="판정보류".
 - 극단값 있어도 median 안정.
 - traded/price None 제외 / 빈 listings → 빈 stats(예외 없음).
 
@@ -239,14 +263,15 @@ def render_markdown(report: dict) -> str: # 분포표+판정(confidence)+호가�
 
 **test_daangn_filter.py** (`filter_listings`) — **[R1/D3 입력정합]**
 - 검색어 토큰 없는 매물 제외("에어팟" 검색에 "갤럭시버즈" 제외).
-- 가격 이상치(median 5배 초과 / 1/5 미만) 제외.
+- 가격 이상치(`> median*5` 초과 / `< median/5` 미만) 제외.
+- **경계 방향 단정(R-1): `price == median*5` 또는 `== median/5` → 보존**(`>`/`<` 이므로 경계값 미제외).
 - 정상 매물 보존 / 빈 입력 → [].
 
 **test_daangn_cheap_warning.py** (`detect_cheap_warnings`) — **[R2/D5, 기존 테스트 0 해소]**
 - 같은 군 median*0.5 미만 1건 → 경고 1개.
 - IQR 규칙: n>=8에서 p25-1.5*IQR 미만 → 경고.
 - 정상가만 있으면 경고 [].
-- 경계: 정확히 median*0.5(미포함/포함 정의대로).
+- **경계 방향 단정(R-1): `price == median*0.5` → 경고 아님**(`<` 미만이므로 경계값 미포함).
 
 **test_daangn_block.py** (`detect_block`)
 - 정상 텍스트 → False.
@@ -264,11 +289,11 @@ def render_markdown(report: dict) -> str: # 분포표+판정(confidence)+호가�
 ## 4. 텍스트 폴백 분할경계 가설 + E2E 검증 절차
 
 ### §4-A 분할경계 가설 (T8 이전 문서화 — B1 요구)
-`parse_search_listings_from_text`의 카드 경계 후보(우선순위):
-1. **가격 토큰** `[0-9][0-9,]*\s*원` 또는 만원 토큰 — 카드당 보통 가격 1개 → 가격 등장을 카드 시작 앵커로.
-2. **반복 상태 마커** — "거래완료" / "예약중" / "N분 전" / "N시간 전" / "N일 전" / 동네명(지역 텍스트) 반복 패턴을 카드 구분선으로.
-3. 위 두 신호를 조합해 조각 분리 → 각 조각을 `parse_listing`에 위임.
-> 실제 blob 구조는 T8에서 확인 후 경계 정규식 확정. **이 함수는 naver에 선례 없는 신규설계**임을 명기.
+`parse_search_listings_from_text`의 카드 경계 후보:
+1. **가격 토큰**(1차 앵커) `[0-9][0-9,]*\s*원` 또는 만원 토큰 — 카드당 보통 가격 1개.
+2. **반복 상태 마커**(보조 앵커, R-3 필수) — "거래완료" / "예약중" / "N분 전" / "N시간 전" / "N일 전" / 동네명(지역 텍스트). **가격 미표기 카드(거래완료 등)는 가격 앵커만으로는 누락되므로, 마커를 보조 경계로 반드시 함께 사용한다.**
+3. 두 신호를 OR로 조합해 조각 분리 → 각 조각을 `parse_listing`에 위임.
+> 실제 blob 구조 및 가격없는 카드 분할 정확도는 **T8 실측 검증 대상**(§8 기록). **이 함수는 naver에 선례 없는 신규설계**임을 명기.
 
 ### §4-B E2E 검증 절차 (Task 8)
 > 전제: headful 고정. `daangn_session_save.py`로 사전 로그인(내 동네 설정 포함).
@@ -311,7 +336,7 @@ def render_markdown(report: dict) -> str: # 분포표+판정(confidence)+호가�
 | 리스크 | 영향 | 완화책 |
 |---|---|---|
 | **당근 DOM 셀렉터·분할경계 미확정** | 수집 0건 가능 | `SELECTORS` 격리 + 폴백 후보 2~4개 + **`parse_search_listings_from_text` 순수 폴백**(§4-A 경계 가설). 실측(T8) 확정. |
-| **소표본(n<8) 흔함** | 분위 불가·판정 약화 | **정상 경로로 설계**: n<8 분위 숨김 + median 비율 라벨 + confidence="low" + n<3 "판정보류"(§9 명시). |
+| **소표본(n<8) 흔함** | 분위 불가·판정 약화 | **정상 경로로 설계**: 라벨은 모든 n에서 median 비율 단일 규칙(B-NEW, 불연속 없음) + n<8 분위/percentile 숨김 + confidence="low" + n<3 "판정보류"(§9 명시). |
 | **지역 의존성** | 표본·시세 왜곡 | 세션 로그인 시 지역 설정(T6) + T8 범위 관찰 + 리포트 note "지역 한정 시세". |
 | **"같은 물건" 식별 정밀도** | 오탐 분포 오염 | **1차에 `filter_listings` 입력정합 가드 포함**(검색어 토큰 + 가격 이상치). 잔여 오탐은 후속 검색어 정규화(§8). |
 | **거래완료가 비노출(호가만)** | 실거래 아님 | 호가분포 기준(설계 확정) + 모든 리포트 한계 note 고정(§3 회귀 테스트). |
@@ -322,6 +347,8 @@ def render_markdown(report: dict) -> str: # 분포표+판정(confidence)+호가�
 
 ## 8. 후속(1차 범위 밖) 과제
 - 검색어 정규화/동의어 사전("에어팟프로2"="에어팟 프로 2세대") — `filter_listings` 잔여 오탐 시.
+- **[R-2] `filter_listings` 이상치 제거의 군별 median 정밀화** — 1차는 전체 median 기준(분류 전 단계라 군 정보 없음). 새것/하자 가격차로 정상 새것 매물이 오제거되는 사례가 관찰되면, 상태군 분류 후 군별 median 기준으로 재필터링하는 2-pass 구조로 정밀화.
+- **[R-3] 가격없는 카드(거래완료 등) 분할 정확도 실측** — `parse_search_listings_from_text`의 보조 마커 앵커가 가격 미표기 카드를 실제로 누락 없이 분할하는지 T8 실 blob으로 검증·보정(§4-A·§4-B 4).
 - "네고가능" 등 비정형 가격 표기 추가 확장.
 - 멀티 지역 비교(내 동네 vs 인접).
 
@@ -331,6 +358,6 @@ def render_markdown(report: dict) -> str: # 분포표+판정(confidence)+호가�
 
 - **소표본은 예외가 아닌 흔한 경로다.** 당근 실표본은 자주 n<8 → `confidence="low"` / `n<3` "판정보류"가 **정상 동작**이지 엣지케이스가 아니다. 리포트·스킬 안내가 이를 솔직히 표기한다(과신 금지). 사용자가 "그래도 추정치라도 달라(라벨 표시)" vs "보류만 명확히" 중 무엇을 선호하는지는 운영하며 조정 — **사용자 결정 대기 1건**.
 - **입력정합 필터(R1) 1차 포함 확정.** `filter_listings`(검색어 토큰 + 가격 이상치)를 MVP에 넣는다(오염 입력이면 통계가 정확해도 판정이 틀리므로).
-- **본문 채택 확정 항목**: 만원 표기 지원(R3②), classify 충돌 시 상급 강등(R3①), cheap_warning 수치 규칙 median*0.5·IQR(R2/D5), 소표본 median 비율 라벨 ±10%(B2④). 운영 중 임계값(0.5·1.5·±10%·5배·n<8) 튜닝 여지만 남김.
+- **본문 채택 확정 항목**: 만원 표기 지원(R3②), classify 충돌 시 상급 강등(R3①), cheap_warning 수치 규칙 median*0.5·IQR(R2/D5), **라벨은 모든 n에서 median 비율 ±10% 단일 규칙(B-NEW — percentile은 n>=8 참고정보만, 라벨 불연속 제거)**, 경계 부등호 방향 단정(R-1, §2 표). 운영 중 임계값(0.9·1.1·0.5·1.5·5배·n=8/3) 튜닝 여지만 남김.
 
 > open-questions: `.omc/plans/open-questions.md` 에 위 결정대기 1건(소표본 추정치 표기 선호)을 기록한다.
