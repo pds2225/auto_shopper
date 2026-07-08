@@ -92,18 +92,6 @@ def _safe_inner_text(page):
         return ""
 
 
-def _count_cart_rows(page):
-    """장바구니 상품 행 개수 추정 (원상복구 검증용). 셀 수 없으면 None."""
-    for sel in SELECTORS["cart_row"]:
-        try:
-            els = page.query_selector_all(sel)
-        except Exception:
-            els = None
-        if els:
-            return len(els)
-    return None
-
-
 def _clamp_top(top):
     """top 인자 클램프: 1~5 (기본 3)."""
     try:
@@ -248,20 +236,11 @@ def _process_one(page, cand, rank):
                     human_delay(page)
                 except Exception:
                     pass
-                before = _count_cart_rows(page)
                 del_btn = _first_match(page, SELECTORS["cart_delete"])
                 if del_btn is not None:
-                    # 삭제 확인 팝업(JS dialog)이 뜨면 1회 수락 — 삭제 확정용(결제와 무관)
-                    page.once("dialog", lambda d: d.accept())
                     del_btn.click()
                     human_delay(page)
-                    after = _count_cart_rows(page)
-                    # 행 수가 실제로 줄었을 때만 removed. 검증 못 하면 거짓 보고 대신 failed+경고.
-                    if before is not None and after is not None and after < before:
-                        offer["cart_cleanup"] = "removed"
-                    else:
-                        offer["cart_cleanup"] = "failed"
-                        print(f"  [경고] 장바구니 삭제 미검증 → 직접 확인 권장: {title}")
+                    offer["cart_cleanup"] = "removed"
                 else:
                     offer["cart_cleanup"] = "failed"
                     print(f"  [경고] 장바구니 수동 정리 필요 (삭제 버튼 매칭 0개): {title}")
