@@ -1,0 +1,152 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1785135866162,
+  "projectRoot": "D:\\auto_shopper",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Python",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "requirements.txt"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "pip",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "scripts",
+      "tests"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "data": {
+      "path": "data",
+      "purpose": "Data files",
+      "fileCount": 3,
+      "lastAccessed": 1785135865656,
+      "keyFiles": [
+        "05_final.json",
+        "05_식기세척기_추천리포트.md",
+        "naver_session.json"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 7,
+      "lastAccessed": 1785135865657,
+      "keyFiles": [
+        "build_final.py",
+        "naver_common.py",
+        "naver_parsers.py",
+        "naver_poc.py",
+        "naver_product_detail.py"
+      ]
+    },
+    "tests": {
+      "path": "tests",
+      "purpose": "Test files",
+      "fileCount": 7,
+      "lastAccessed": 1785135865658,
+      "keyFiles": [
+        "conftest.py",
+        "test_block_detection.py",
+        "test_normalize.py",
+        "test_price_parsing.py",
+        "test_review_parsing.py"
+      ]
+    },
+    "_saved": {
+      "path": "_saved",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1785135865659,
+      "keyFiles": []
+    },
+    "_workspace": {
+      "path": "_workspace",
+      "purpose": null,
+      "fileCount": 6,
+      "lastAccessed": 1785135865662,
+      "keyFiles": [
+        "01_decision_candidates.json",
+        "03_price_compare.json",
+        "04_review_risk.json",
+        "05_final_recommendation.json",
+        "galaxybook3-pro360-privacy_2026-07-15.json"
+      ]
+    },
+    "_workspace_prev": {
+      "path": "_workspace_prev",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1785135865662,
+      "keyFiles": [
+        "poc_result.json"
+      ]
+    },
+    "tests\\fixtures": {
+      "path": "tests\\fixtures",
+      "purpose": "Test fixtures",
+      "fileCount": 6,
+      "lastAccessed": 1785135865665,
+      "keyFiles": [
+        "candidates_sample.json",
+        "checkout_partial.txt",
+        "checkout_sample.txt"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "",
+      "accessCount": 1,
+      "lastAccessed": 1785135947304,
+      "type": "directory"
+    },
+    {
+      "path": "scripts\\naver_poc.py",
+      "accessCount": 1,
+      "lastAccessed": 1785136199559,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\ekth3\\.claude\\projects\\D--auto-shopper",
+      "accessCount": 1,
+      "lastAccessed": 1785136213163,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\ekth3\\.claude\\jobs\\869abc12\\tmp\\baemin_gift.py",
+      "accessCount": 1,
+      "lastAccessed": 1785136246055,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
