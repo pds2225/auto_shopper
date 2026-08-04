@@ -1,0 +1,79 @@
+# RESUME.md — 세션 재시작 시 이어하기 진입점
+
+> 새 세션을 시작하면 이 파일을 가장 먼저 읽어라. (최종 갱신: 2026-08-04)
+
+---
+
+## 🔴 지금 이어갈 것 (2026-08-04, 미완료)
+
+**사용자 요청:** "배달의민족 네이버페이 가장고액상품권 중에 낮은가격?"
+→ 배민 상품권 중 **가장 큰 액면가**(5만/10만원권 등) 그룹만 추린 뒤, 그 안에서 **실판매가 최저 + 할인율**을 표로 제시. 결제는 하지 않고 **구매 직전 링크까지만**.
+
+**진행 상태:** 조회 경로만 확보, **실제 검색 미실행**(컨텍스트 압축 2회로 중단).
+
+**바로 이어가는 법:**
+```powershell
+# 기본 조회 (단, display=10 · 가격오름차순 고정이라 액면가 전수 수집엔 부족)
+python scripts\naver_poc.py "배달의민족 상품권" --mode api
+```
+→ 권장: display 를 100까지 늘린 **일회성 조회 스크립트**를 임시 폴더에 만들어
+`"배달의민족 상품권" / "배민 상품권" / "배달의민족 금액권" / "배민 기프티콘"` 을 돌리고,
+제목에서 액면가(5천/1만/3만/5만/10만원권) 파싱 → 최고 액면가 그룹 필터 → 실판매가 최저·할인율 계산.
+`scripts/naver_poc.py` 본체는 PoC 계약이라 수정하지 않는다.
+
+**검증된 사실(재확인 불필요):**
+- 네이버 **검색용 MCP는 없다.** 붙어 있는 `ncp` MCP는 네이버 **클라우드 인프라** 관리 전용(검색 기능 없음).
+- `.env` 에 `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET` **설정돼 있음**(값 출력 금지) → 공식 검색 API 즉시 사용 가능.
+- 상세: `.omc/wiki/mcp-api.md` · `~/.claude/skills/naver-browser-automation/SKILL.md` 의 "먼저 API 모드부터 확인" 절.
+
+---
+
+## 0. 30초 컨텍스트 (이전 작업 — 자가학습 MVP, 2026-07-10)
+에이전트 세션 결과를 평가·학습하는 자가학습 MVP를 구축 완료. session-closeout 0단계 연동까지 끝남. 사용자 만족도 2점(아쉬움) — 후속 자동화·품질 개선이 남음.
+
+## 1. 빠른 재개 (복붙용)
+```shell
+# 평가 기록
+python D:/.omc/agent-learning/scripts/log_evaluation.py --overall 4 --summary "..." --project-root "D:/auto_shopper"
+
+# 학습 추출·적용
+python D:/.omc/agent-learning/scripts/extract_learnings.py --project "D:/auto_shopper"
+python D:/.omc/agent-learning/scripts/apply_learning.py --notepad --project "D:/auto_shopper"
+```
+
+## 2. 완료된 작업 ✅
+- [x] `D:/.omc/specs/agent-self-learning.md` 스펙 작성
+- [x] `D:/.omc/agent-learning/scripts/` (log_evaluation, extract_learnings, apply_learning)
+- [x] `agent-self-learning` Cursor/Claude 스킬 생성
+- [x] `session-closeout` 0단계 연동
+- [x] 스모크 테스트 통과
+
+## 3. 남은 작업 ⬜ (다음 세션에서 이어서)
+- [ ] SessionEnd 훅 자동 평가 플래그 (`.learning_eval_due`)
+- [ ] `actual-use-approval-loop` 결과를 `--approval-loop`로 자동 기록
+- [ ] `work-cockpit` activities에 `agent_eval` 이벤트 연동
+- [ ] LLM 기반 학습 요약 배치 (nightly)
+- [ ] 사용자가 아쉬움(2점) 표시 — 어떤 부분이 부족했는지 피드백 수집 후 개선
+
+## 4. 핵심 결정·제약 (되돌리지 말 것)
+- `self-improve`(코드 벤치마크)와 `agent-self-learning`(세션 품질)은 별도 스킬로 유지
+- MVP에서는 Cursor user rules 자동 변경 금지 — 사용자 확인 필요
+- 평가 데이터: 전역 `D:/.omc/agent-learning/`, 프로젝트 `D:/auto_shopper/_workspace/learning/`
+
+## 5. 핵심 파일 인덱스 (어디에 뭐가 있나)
+| 알고 싶은 것 | 파일 |
+|---|---|
+| 전체 아키텍처 | `D:/.omc/specs/agent-self-learning.md` |
+| 평가 로그 | `D:/.omc/agent-learning/evaluations.jsonl` |
+| 학습 후보 | `D:/.omc/agent-learning/pending-learnings.jsonl` |
+| 스킬 (트리거·절차) | `C:/Users/ekth3/.cursor/skills/agent-self-learning/SKILL.md` |
+| 세션 마무리 연동 | `C:/Users/ekth3/.cursor/skills/session-closeout/SKILL.md` |
+
+## 6. 검증된 사실 (재확인 불필요)
+- `log_evaluation.py` + `extract_learnings.py` + `apply_learning.py` 스모크 테스트 통과
+- `overall <= 2` 시 notepad anti-pattern 자동 주입 동작 확인
+
+## 7. 재개 시 첫 행동
+1. 사용자에게 2점(아쉬움) 이유 확인 — 무엇이 부족했는지 피드백 수집
+2. 피드백 기반으로 MVP 개선 우선순위 결정 (자동화 vs 평가 UX vs 학습 품질)
+3. 필요 시 `D:/.omc/specs/agent-self-learning.md` 후속 항목부터 구현
