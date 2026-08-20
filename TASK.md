@@ -15,9 +15,8 @@ TASK 1개 = 반드시 1줄. LIST의 TASK_ID와 DETAILS의 TASK_ID는 반드시 1
 REQUEST_SOLVED=YES가 아닌 작업은 완료 표시 금지.
 -->
 
-현재 수행할 사용자 요청 없음.
+- [~] TASK-WEB-1 휴대폰·어디서나 쓰는 쇼핑 웹앱 만들고 검사 통과 후 자동병합
 
-NO_ACTIVE_TASK
 
 
 ---
@@ -267,10 +266,52 @@ TASK LIST 한 줄 요약과 아래 상세 TASK는 TASK_ID로 연결한다.
 MUST / KEEP / REMOVE / FORBIDDEN / VERIFY / DONE
 관점으로 변환한다.
 
-현재 활성 TASK 없음. 가짜 할 일을 만들지 않는다.
+TASK 실행 계약:
+TASK_ID: TASK-WEB-1
+TASK_START_SHA: c8d91bb03e7763bf8d68d044b15a1de0da9336d6
+TASK_BLOB_SHA: 050f99fc4082c7f9019dab0bd58187ca5067e89c
+WORK_BRANCH: cursor/mobile-web-anywhere-7b31
 -->
 
-NO_ACTIVE_TASK
+## TASK-WEB-1 휴대폰·어디서나 쓰는 쇼핑 웹앱
+
+원문: "아무데서나쓸수있께 웹개발 폰도" + "다하고 자동병합"
+
+MUST:
+- 폰/PC 브라우저에서 바로 쓰는 모바일 웹 화면
+- 한글이 아이폰·안드로이드·PC에서 깨지지 않는 웹폰트 스택
+- 검색어로 네이버 쇼핑 결과를 보여 주고, 구매 링크는 새 탭(결제 클릭 자동화 금지)
+- API 키가 없어도 화면이 비지 않게 데모 결과 + 안내
+- 홈 화면 추가(PWA) 가능
+- pytest + 웹 빌드 통과
+- 검사 초록이면 main 자동병합
+
+KEEP:
+- 기존 Python 파이프라인(scripts/, tests/) 동작
+- 결제 버튼 자동 클릭 금지
+- 비밀번호·시크릿 커밋 금지
+
+REMOVE:
+- 해당 없음
+
+FORBIDDEN:
+- 결제/주문 실행
+- 봇차단 우회
+- Secret을 소스에 넣기
+- force push / 실패 체크 무시 머지
+
+VERIFY:
+- 빈 검색어 / 너무 긴 검색어 거부
+- 데모 모드 결과 카드가 그려짐
+- 실API 파싱 픽스처 통과
+- 웹 `npm run build` 성공
+- 기존 `python -m pytest` 통과
+
+DONE:
+- 폰 화면에서 검색→결과→구매링크 흐름이 보임
+- REQUEST_SOLVED=YES
+- PR 생성, Checks 초록 후 병합
+
 
 ---
 

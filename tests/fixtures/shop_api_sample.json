@@ -1,0 +1,32 @@
+{
+  "lastBuildDate": "Thu, 20 Aug 2026 00:00:00 +0900",
+  "total": 2,
+  "start": 1,
+  "display": 2,
+  "items": [
+    {
+      "title": "<b>무선청소기</b> G10 플러스",
+      "link": "https://search.shopping.naver.com/catalog/111",
+      "image": "https://example.com/g10.jpg",
+      "lprice": "137000",
+      "hprice": "",
+      "mallName": "샤오미스토어",
+      "productId": "111",
+      "brand": "샤오미",
+      "maker": "샤오미",
+      "category1": "생활",
+      "category2": "청소기",
+      "category3": "무선청소기"
+    },
+    {
+      "title": "다이슨 V12 &amp; 필터세트",
+      "link": "https://search.shopping.naver.com/catalog/222",
+      "image": "https://example.com/v12.jpg",
+      "lprice": "890000",
+      "mallName": "공식몰",
+      "productId": "222",
+      "brand": "다이슨",
+      "category3": "무선청소기"
+    }
+  ]
+}

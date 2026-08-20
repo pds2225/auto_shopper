@@ -2,14 +2,28 @@
 
 네이버 기반 **쇼핑 대행 하네스**. 제품 추천부터 실제 결제가 최저가, 리뷰 위험 점검, 구매 직전까지 대신 차려줍니다. (결제 버튼만 직접)
 
+## 휴대폰·어디서나 (웹)
+
+PC 없이 폰 브라우저에서도 씁니다. 한글은 `Noto Sans KR` + 아이폰/안드로이드 시스템 폰트 스택이라 깨지지 않습니다.
+
+```powershell
+cd web
+npm install
+npm run dev
+```
+
+같은 와이파이의 휴대폰에서 `http://(컴퓨터IP):3000` 으로 엽니다. 브라우저에서 홈 화면에 추가하면 앱처럼 열립니다.
+
+- 검색 결과가 카드로 나오고, 상품을 누르면 네이버 쇼핑으로 이동합니다.
+- `.env`에 `NAVER_CLIENT_SECRET`이 있으면 실검색, 없으면 데모 결과 + 네이버 모바일 검색 링크.
+- Vercel에 올릴 때는 **Root Directory = `web`**. 시크릿은 Vercel 환경변수로만 넣으세요.
+
 ## 폴더 구조
 ```
 auto_shopper/
-├─ .claude/
-│  ├─ agents/    5종 (decision-advisor, browser-agent, price-hunter, review-risk-analyst, best-deal-finder)
-│  └─ skills/    5종 (shopping-concierge=총괄, purchase-decision, naver-browser-automation, lowest-price-search, review-risk-scan)
-├─ scripts/
-│  └─ naver_poc.py   네이버 검색 작동 증명(PoC)
+├─ web/          휴대폰·PC용 웹앱 (Next.js)
+├─ scripts/      네이버/당근 파이프라인
+├─ tests/
 ├─ _workspace/   중간 산출물(JSON)
 ├─ data/         세션 쿠키 등(비밀 정보, 커밋 금지)
 ├─ requirements.txt
@@ -58,6 +72,7 @@ python scripts\naver_poc.py "무선청소기" --mode api
 
 ## 로드맵
 - [x] 1단계: 골격 + 검색 PoC
+- [x] 휴대폰·어디서나 웹앱 (`web/`)
 - [ ] 2단계: 상품상세·쿠폰 적용가 캡처
 - [ ] 3단계: 결제 직전 최종가 + 리뷰 자동수집
 - [ ] 4단계: 통합 추천(best-deal-finder) 완성
