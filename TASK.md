@@ -15,7 +15,7 @@ TASK 1개 = 반드시 1줄. LIST의 TASK_ID와 DETAILS의 TASK_ID는 반드시 1
 REQUEST_SOLVED=YES가 아닌 작업은 완료 표시 금지.
 -->
 
-- [~] TASK-OVN-1  밤샘 자동 개발: 2단계 파이프라인을 실사용 가능하게 마무리 (리뷰위험 폴백·단일 실행·pytest CI·문서)
+- [x] TASK-OVN-1  밤샘 자동 개발: 2단계 파이프라인을 실사용 가능하게 마무리 (리뷰위험 폴백·단일 실행·pytest CI·문서)
 
 
 ---
@@ -300,7 +300,7 @@ VERIFY:
 - GitHub Actions pytest workflow 파일이 존재한다.
 
 DONE:
-- REQUEST_SOLVED=YES 는 위 MUST가 모두 코드·테스트·문서로 확인될 때만.
+- REQUEST_SOLVED=YES. pytest 140, `run_naver.py --offline`에서 가품 최저가가 3순위(제외)로 강등, pytest CI·README·AGENTS.md 반영.
 
 ---
 
