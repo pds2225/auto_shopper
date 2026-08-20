@@ -361,3 +361,182 @@ def score_offer(price_norm, rating, penalty):
     pen = float(penalty or 0.0)
     score = pn + (rt / 5.0) - pen
     return round(score, 4)
+
+
+# ---------------------------------------------------------------------------
+# 리뷰 위험 휴리스틱 (LLM review-risk-analyst 폴백)
+# ---------------------------------------------------------------------------
+# 구매자 보호: 안전 키워드(가품/사기/발화 등)는 1건만 있어도 제외.
+# 품질 불만(고장/흡입력 등)은 저평점과 겹치거나 2건 이상이면 주의.
+_EXCLUDE_HARD = (
+    "가품", "짝퉁", "위조", "사기", "환불 거부", "환불거부",
+    "발화", "폭발", "화재", "감전", "화상",
+)
+_CAUTION = (
+    "고장", "불량", "파손", "작동 안", "작동안", "먹통",
+    "하루 만에", "하루만에", "한 달 만에", "한달 만에", "한 달만에",
+    "흡입력 떨어", "배터리 빨리", "배터리도 금방",
+    "소음 심", "냄새 심", "서비스센터", "as도 느", "as 느", "비추천",
+)
+
+
+def _review_text(review):
+    """리뷰 dict 또는 문자열에서 본문만 뽑는다."""
+    if review is None:
+        return ""
+    if isinstance(review, str):
+        return review
+    return str(review.get("text") or "")
+
+
+def _review_rating(review):
+    if not isinstance(review, dict):
+        return None
+    val = review.get("rating")
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def _hits(text, patterns):
+    blob = text or ""
+    return [p for p in patterns if p.lower() in blob.lower()]
+
+
+def assess_product_reviews(reviews, rating_avg=None):
+    """한 상품의 리뷰 목록 → {verdict, reasons, evidence}.
+
+    verdict: 제외 | 주의 | 안전 | 미상
+    리뷰가 없으면 미상. LLM 없이도 AC-4 페널티가 돌 수 있게 한다.
+    """
+    items = list(reviews or [])
+    if not items:
+        return {"verdict": "미상", "reasons": ["리뷰 없음"], "evidence": []}
+
+    exclude_hits = []
+    caution_hits = []
+    evidence = []
+    low_star = 0
+    ratings = []
+
+    for rev in items:
+        text = _review_text(rev)
+        rating = _review_rating(rev)
+        if rating is not None:
+            ratings.append(rating)
+            if rating <= 2.0:
+                low_star += 1
+        hard = _hits(text, _EXCLUDE_HARD)
+        caution = _hits(text, _CAUTION)
+        if hard:
+            exclude_hits.extend(hard)
+            evidence.append(text[:160])
+        elif caution:
+            caution_hits.extend(caution)
+            evidence.append(text[:160])
+
+    avg = rating_avg
+    if avg is None and ratings:
+        avg = sum(ratings) / len(ratings)
+
+    reasons = []
+    if exclude_hits:
+        reasons.append("위험 키워드: " + ", ".join(sorted(set(exclude_hits))))
+        return {
+            "verdict": "제외",
+            "reasons": reasons,
+            "evidence": evidence[:5],
+        }
+
+    caution_unique = sorted(set(caution_hits))
+    if caution_unique and (len(caution_hits) >= 2 or low_star >= 1):
+        reasons.append("품질 불만 키워드: " + ", ".join(caution_unique))
+        if low_star:
+            reasons.append(f"저평점 리뷰 {low_star}건")
+        return {
+            "verdict": "주의",
+            "reasons": reasons,
+            "evidence": evidence[:5],
+        }
+
+    if avg is not None and avg <= 2.5 and len(items) >= 3:
+        reasons.append(f"평균 평점 {avg:.1f} (리뷰 {len(items)}건)")
+        return {
+            "verdict": "주의",
+            "reasons": reasons,
+            "evidence": evidence[:5],
+        }
+
+    return {"verdict": "안전", "reasons": ["deal-breaker 키워드 없음"], "evidence": []}
+
+
+def assess_reviews_document(reviews_data):
+    """04_reviews.json dict → 04_review_risk.json dict (휴리스틱).
+
+    build_final._build_risk_index 가 읽는 products[].verdict 계약을 맞춘다.
+    """
+    from naver_common import now
+    reviews_data = reviews_data or {}
+    products_out = []
+    for p in reviews_data.get("products") or []:
+        assessed = assess_product_reviews(p.get("reviews") or [], p.get("rating_avg"))
+        products_out.append({
+            "title": p.get("title"),
+            "link": p.get("link"),
+            "verdict": assessed["verdict"],
+            "reasons": assessed["reasons"],
+            "evidence": assessed["evidence"],
+        })
+    return {
+        "query": reviews_data.get("query"),
+        "ts": now(),
+        "source": "heuristic",
+        "products": products_out,
+    }
+
+
+def offer_from_candidate(raw_item):
+    """정규화된 후보 → 03_prices offers[] 한 건 (참고가 폴백).
+
+    브라우저/주문서 없이 표시가만 있을 때 AC-2 참고가 경로로 파이프라인을 완주한다.
+    """
+    n = normalize_candidate(raw_item)
+    price = n.get("list_price")
+    link = n.get("link")
+    return {
+        "mall": n.get("mall") or "미상",
+        "title": n.get("title"),
+        "link": link,
+        "list_price": price,
+        "coupon": 0,
+        "card_discount": 0,
+        "point": 0,
+        "shipping": 0,
+        "final_price": price,
+        "confidence": "참고가",
+        "is_reference": True,
+        "cart_cleanup": "not_added",
+        "needs_human": False,
+        "url": link,
+        "rank": n.get("rank"),
+        "product_id": n.get("product_id"),
+    }
+
+
+def offers_from_candidates(candidates, top=None):
+    """01_candidates.json dict → offers 리스트. 제목/링크 없는 깨진 항목은 건너뛴다."""
+    items = [
+        it for it in ((candidates or {}).get("items") or [])
+        if isinstance(it, dict)
+    ]
+    offers = []
+    for it in items:
+        offer = offer_from_candidate(it)
+        if offer.get("title") or offer.get("link"):
+            offers.append(offer)
+        if top is not None and len(offers) >= top:
+            break
+    return offers
