@@ -16,3 +16,8 @@ _workspace_prev/
 __pycache__/
 *.pyc
 .venv/
+# 웹앱
+web/node_modules/
+web/.next/
+web/out/
+web/tsconfig.tsbuildinfo

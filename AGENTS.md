@@ -2,7 +2,7 @@
 
 ## Cursor Cloud specific instructions
 
-Python 3.12 CLI project (Naver / 당근마켓 쇼핑 대행 하네스). There is no web server or GUI app — the application is the set of CLI scripts under `scripts/`. Standard install/run commands live in `README.md`.
+Python 3.12 CLI project plus a phone/desktop web app under `web/` (Naver / 당근마켓 쇼핑 대행 하네스). CLI scripts live in `scripts/`. The mobile web UI is `web/` (Next.js). Standard install/run commands live in `README.md`.
 
 ### Environment
 - Dependencies are installed into a `.venv` virtualenv at the repo root. Always invoke tools via that venv, e.g. `.venv/bin/python`, `.venv/bin/pytest`. `.venv/` is gitignored.
@@ -10,7 +10,8 @@ Python 3.12 CLI project (Naver / 당근마켓 쇼핑 대행 하네스). There is
 
 ### Test / lint
 - Tests: `.venv/bin/python -m pytest -q` — pure unit tests driven by fixtures in `tests/fixtures/`. No network or browser needed.
-- No linter/formatter is configured (no ruff/flake8/black/pyproject).
+- Web app: `cd web && npm test && npm run build`
+- No Python linter/formatter is configured (no ruff/flake8/black/pyproject).
 
 ### Running the app (pipelines)
 - Runtime artifacts go to `_workspace/` (gitignored) as numbered JSON: `01_candidates` → `03_prices` → `04_reviews`/`04_review_risk` → `05_final`.
