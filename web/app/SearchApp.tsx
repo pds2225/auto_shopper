@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { sortItems } from "@/lib/shop.mjs";
 
 type ShopItem = {
   title: string;
@@ -50,6 +51,7 @@ export default function SearchApp() {
     try {
       const res = await fetch(
         `/api/search?q=${encodeURIComponent(trimmed)}&sort=${encodeURIComponent(nextSort)}`,
+        { cache: "no-store" },
       );
       const json = (await res.json()) as SearchResponse;
       if (!res.ok && !json.items?.length) {
@@ -70,7 +72,10 @@ export default function SearchApp() {
     void runSearch(q, sort);
   }
 
-  const items = data?.items || [];
+  const items = useMemo(
+    () => sortItems(data?.items || [], sort),
+    [data, sort],
+  );
   const isDemo = data?.source === "demo";
   const naverUrl = useMemo(() => {
     if (data?.naver_mobile_url) return data.naver_mobile_url;

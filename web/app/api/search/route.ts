@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const { query, error } = sanitizeQuery(searchParams.get("q") || "");
   if (!query) {
-    return NextResponse.json({ ok: false, reason: error, items: [] }, { status: 400 });
+    return NextResponse.json({ ok: false, reason: error, items: [] }, { status: 400, headers: { "Cache-Control": "no-store" } });
   }
   const sort = clampSort(searchParams.get("sort") || "sim");
   const display = Math.max(1, Math.min(Number(searchParams.get("display") || 20) || 20, 40));
@@ -43,6 +43,7 @@ export async function GET(request: Request) {
         "네이버 API 키가 없어 데모 결과를 보여줍니다. 휴대폰에서는 아래 ‘네이버에서 보기’로 바로 검색할 수 있습니다.",
         sort,
       ),
+      { headers: { "Cache-Control": "no-store" } },
     );
   }
 
@@ -66,15 +67,19 @@ export async function GET(request: Request) {
       );
     }
     const payload = await res.json();
+    const parsed = parseNaverResponse(payload);
     const items = sortItems(parsed.items, sort);
-    return NextResponse.json({
-      ...parsed,
-      items,
-      count: items.length,
-      source: "naver",
-      query,
-      naver_mobile_url: naverMobileUrl(query),
-    });
+    return NextResponse.json(
+      {
+        ...parsed,
+        items,
+        count: items.length,
+        source: "naver",
+        query,
+        naver_mobile_url: naverMobileUrl(query),
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (err) {
     console.error("naver shop api error", err);
     return NextResponse.json(
