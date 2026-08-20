@@ -261,7 +261,11 @@ def main():
 
     if reviews is None:
         print("[안내] 04_reviews.json 없음 - 평점 없이 진행")
-    if risk is None:
+    if risk is None and reviews:
+        from naver_parsers import assess_reviews_document
+        risk = assess_reviews_document(reviews)
+        print("[안내] 04_review_risk.json 없음 - 휴리스틱 판정 사용")
+    elif risk is None:
         print("[안내] 04_review_risk.json 없음 - verdict='미상'으로 진행")
 
     result = build(prices, reviews, risk)

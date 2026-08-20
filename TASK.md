@@ -15,8 +15,8 @@ TASK 1개 = 반드시 1줄. LIST의 TASK_ID와 DETAILS의 TASK_ID는 반드시 1
 REQUEST_SOLVED=YES가 아닌 작업은 완료 표시 금지.
 -->
 
+- [x] TASK-OVN-1  밤샘 자동 개발: 2단계 파이프라인을 실사용 가능하게 마무리 (리뷰위험 폴백·단일 실행·pytest CI·문서)
 - [~] TASK-WEB-1 휴대폰·어디서나 쓰는 쇼핑 웹앱 만들고 검사 통과 후 자동병합
-
 
 
 ---
@@ -151,10 +151,10 @@ behind가 생겼으면 force로 덮지 말고 먼저 받고 합친다. 그다음
 
 AI가 TASK를 시작할 때 반드시 아래 값을 기록한다.
 
-TASK_ID: <현재 [~] TASK ID>
-TASK_START_SHA: <작업 시작 시 origin/base commit SHA>
-TASK_BLOB_SHA: <그 시점 TASK.md blob SHA>
-WORK_BRANCH: <task/TASK-ID 등>
+TASK_ID: TASK-OVN-1
+TASK_START_SHA: c8d91bb03e7763bf8d68d044b15a1de0da9336d6
+TASK_BLOB_SHA: 050f99fc4082c7f9019dab0bd58187ca5067e89c
+WORK_BRANCH: cursor/overnight-auto-dev-0caa
 
 ## 목적
 
@@ -265,17 +265,53 @@ TASK LIST 한 줄 요약과 아래 상세 TASK는 TASK_ID로 연결한다.
 새 사용자 요청을 TASK로 만들 때 반드시:
 MUST / KEEP / REMOVE / FORBIDDEN / VERIFY / DONE
 관점으로 변환한다.
+-->
+
+### TASK-OVN-1  밤샘 자동 개발
+
+USER_REQUEST: 밤샘 자동 개발
+
+MUST:
+- LLM 에이전트 없이도 리뷰 위험 판정(안전/주의/제외/미상)이 05_final에 반영되게 한다. `04_review_risk.json`이 없으면 휴리스틱 폴백을 쓴다.
+- 검색어 하나(또는 `--offline`)로 01→05 데이터 흐름을 도는 단일 실행 스크립트를 제공한다.
+- 코드 PR에서 pytest가 GitHub Actions로 돌게 한다. (docs-gate만 있으면 merge-when-green이 테스트를 막지 못한다.)
+- README를 실제 구현 상태(2~4단계 완료, 당근 시세, 단일 실행)에 맞게 고친다.
+- 클라우드 에이전트가 재실행할 수 있게 AGENTS.md와 `.venv/` gitignore를 추가한다.
+
+KEEP:
+- 기존 `naver_poc.py` 무수정.
+- 기존 단위테스트 통과.
+- 결제 클릭 금지, 캡차 우회 금지, 시크릿 커밋 금지, headful 고정.
+
+REMOVE:
+- README 로드맵의 이미 구현된 2~4단계를 미완료로 남겨 두는 표기.
+
+FORBIDDEN:
+- 결제/주문 실행 자동화.
+- 봇차단/캡차 우회.
+- 네이버·당근 외 쇼핑몰 추가.
+- 당근 n<3 "판정보류 vs 추정치" 사용자 결정 항목을 임의로 바꾸기.
+- `git add -A`, force push, reset --hard.
+
+VERIFY:
+- `python -m pytest -q` 통과 (네트워크 0).
+- 신규 py `python -m py_compile` 통과.
+- `run_naver.py --offline`이 `_workspace/05_final.json`을 만들고, 제외 대상이 1순위에서 내려간다.
+- 결제 클릭 셀렉터/호출 0건.
+- GitHub Actions pytest workflow 파일이 존재한다.
+
+DONE:
+- REQUEST_SOLVED=YES. pytest 140, `run_naver.py --offline`에서 가품 최저가가 3순위(제외)로 강등, pytest CI·README·AGENTS.md 반영.
+
+## TASK-WEB-1 휴대폰·어디서나 쓰는 쇼핑 웹앱
+
+원문: "아무데서나쓸수있께 웹개발 폰도" + "다하고 자동병합"
 
 TASK 실행 계약:
 TASK_ID: TASK-WEB-1
 TASK_START_SHA: c8d91bb03e7763bf8d68d044b15a1de0da9336d6
 TASK_BLOB_SHA: 050f99fc4082c7f9019dab0bd58187ca5067e89c
 WORK_BRANCH: cursor/mobile-web-anywhere-7b31
--->
-
-## TASK-WEB-1 휴대폰·어디서나 쓰는 쇼핑 웹앱
-
-원문: "아무데서나쓸수있께 웹개발 폰도" + "다하고 자동병합"
 
 MUST:
 - 폰/PC 브라우저에서 바로 쓰는 모바일 웹 화면
