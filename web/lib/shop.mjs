@@ -79,4 +79,14 @@ export function clampSort(sort) {
   return ALLOWED_SORT.has(sort) ? sort : "sim";
 }
 
+export function sortItems(items, sort) {
+  const copy = Array.isArray(items) ? items.slice() : [];
+  if (sort === "asc") {
+    copy.sort((a, b) => (a?.price ?? Number.POSITIVE_INFINITY) - (b?.price ?? Number.POSITIVE_INFINITY));
+  } else if (sort === "dsc") {
+    copy.sort((a, b) => (b?.price ?? Number.NEGATIVE_INFINITY) - (a?.price ?? Number.NEGATIVE_INFINITY));
+  }
+  return copy;
+}
+
 export { MAX_QUERY_LEN };

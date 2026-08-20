@@ -6,6 +6,7 @@ import {
   formatWon,
   parseNaverResponse,
   demoItems,
+  sortItems,
 } from "./shop.mjs";
 
 describe("sanitizeQuery", () => {
@@ -71,5 +72,16 @@ describe("demoItems", () => {
       assert.match(item.title, /웹개발 폰트/);
       assert.ok(item.link.startsWith("https://"));
     }
+  });
+});
+
+describe("sortItems", () => {
+  it("orders by price ascending", () => {
+    const items = demoItems("웹개발 폰트");
+    const sorted = sortItems(items, "asc");
+    assert.deepEqual(
+      sorted.map((item) => item.price),
+      [89000, 129000, 219000],
+    );
   });
 });

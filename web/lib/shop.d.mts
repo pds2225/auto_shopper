@@ -21,4 +21,5 @@ export function parseNaverResponse(payload: unknown): {
 export function demoItems(query: string): Array<NonNullable<ReturnType<typeof normalizeItem>>>;
 export function naverMobileUrl(query: string): string;
 export function clampSort(sort: string): string;
+export function sortItems<T extends { price: number | null }>(items: T[], sort: string): T[];
 export const MAX_QUERY_LEN: number;

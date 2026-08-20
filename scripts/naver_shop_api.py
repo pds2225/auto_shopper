@@ -111,6 +111,16 @@ def demo_items(query):
     return [normalize_item(s) for s in samples]
 
 
+def sort_items(items, sort):
+    """asc/dsc 일 때 가격순. sim/그 외는 원래 순서."""
+    items = list(items or [])
+    if sort == "asc":
+        items.sort(key=lambda it: it.get("price") if it.get("price") is not None else 10**18)
+    elif sort == "dsc":
+        items.sort(key=lambda it: it.get("price") if it.get("price") is not None else -1, reverse=True)
+    return items
+
+
 def search_shop(query, display=DEFAULT_DISPLAY, sort="sim"):
     """공식 쇼핑 검색 API. 키 없으면 demo 결과를 돌려준다.
 
@@ -131,7 +141,7 @@ def search_shop(query, display=DEFAULT_DISPLAY, sort="sim"):
     cid = (os.environ.get("NAVER_CLIENT_ID") or "").strip()
     secret = (os.environ.get("NAVER_CLIENT_SECRET") or "").strip()
     if not cid or not secret:
-        items = demo_items(cleaned)
+        items = sort_items(demo_items(cleaned), sort)
         return {
             "ok": True,
             "source": "demo",
@@ -153,7 +163,7 @@ def search_shop(query, display=DEFAULT_DISPLAY, sort="sim"):
         with urllib.request.urlopen(req, timeout=10) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
     except Exception as exc:
-        items = demo_items(cleaned)
+        items = sort_items(demo_items(cleaned), sort)
         return {
             "ok": True,
             "source": "demo",
@@ -164,6 +174,8 @@ def search_shop(query, display=DEFAULT_DISPLAY, sort="sim"):
             "query": cleaned,
         }
     parsed = parse_naver_response(payload)
+    parsed["items"] = sort_items(parsed.get("items") or [], sort)
+    parsed["count"] = len(parsed["items"])
     parsed.update({
         "source": "naver",
         "query": cleaned,

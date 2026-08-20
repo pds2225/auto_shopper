@@ -78,3 +78,10 @@ def test_search_shop_demo_without_keys(monkeypatch):
     assert out["count"] >= 1
     assert "naver_mobile_url" in out
     assert "query=" in out["naver_mobile_url"]
+
+
+def test_search_shop_demo_sort_asc(monkeypatch):
+    monkeypatch.delenv("NAVER_CLIENT_ID", raising=False)
+    monkeypatch.delenv("NAVER_CLIENT_SECRET", raising=False)
+    out = S.search_shop("웹개발 폰트", sort="asc")
+    assert [it["price"] for it in out["items"]] == [89000, 129000, 219000]
